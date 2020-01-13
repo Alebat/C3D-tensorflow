@@ -19,18 +19,16 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import os
-
 import cv2
 import numpy as np
-import tensorflow as tf
+import os
+import tensorflow.compat.v1 as tf
 
 # Basic model parameters as external flags.
 from C3D_tensorflow import c3d_model
 from src.bboxes import read_images
 
 flags = tf.app.flags
-gpu_num = 2
 flags.DEFINE_integer('batch_size', 10, 'Batch size.')
 FLAGS = flags.FLAGS
 
@@ -78,6 +76,8 @@ def read_batches_of_clips(paths, batch_size, num_frames_per_clip=16, stride=8, r
     for clip, name in read_clips(paths, num_frames_per_clip, stride, resize_size):
         if len(clips) >= batch_size:
             yield np.array(clips), names
+            clips = []
+            names = []
         clips.append(clip)
         names.append(name)
 
@@ -117,7 +117,7 @@ def run_test():
     )
     print("Number of test videos={}".format(len(test_videos)))
 
-    batch_size = FLAGS.batch_size * gpu_num
+    batch_size = FLAGS.batch_size
 
     # Get the sets of images and labels for training, validation, and
     images_placeholder, labels_placeholder = placeholder_inputs(batch_size)
@@ -149,12 +149,11 @@ def run_test():
             'out': _variable_with_weight_decay('bout', [c3d_model.NUM_CLASSES], 0.04, 0.0),
         }
     logits = []
-    for gpu_index in range(0, gpu_num):
-        with tf.device('/gpu:%d' % gpu_index):
-            logit = c3d_model.inference_c3d(
-                images_placeholder[gpu_index * FLAGS.batch_size:(gpu_index + 1) * FLAGS.batch_size, :, :, :, :], 0.6,
-                FLAGS.batch_size, weights, biases)
-            logits.append(logit)
+    with tf.device('/gpu:0'):
+        logit = c3d_model.inference_c3d(
+            images_placeholder[0:FLAGS.batch_size, :, :, :, :], 0.6,
+            FLAGS.batch_size, weights, biases)
+        logits.append(logit)
     logits = tf.concat(logits, 0)
     saver = tf.train.Saver()
     sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
