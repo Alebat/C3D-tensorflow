@@ -26,7 +26,7 @@ import tensorflow.compat.v1 as tf
 
 # Basic model parameters as external flags.
 from C3D_tensorflow import c3d_model
-from src.bboxes import read_images
+from src.exp.bboxes import read_images
 
 flags = tf.app.flags
 flags.DEFINE_integer('batch_size', 10, 'Batch size.')

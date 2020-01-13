@@ -21,7 +21,7 @@ from __future__ import print_function
 import cv2
 import numpy as np
 
-from src.bboxes import read_images
+from src.exp.bboxes import read_images
 
 
 def read_batches_of_clips(paths, batch_size, num_frames_per_clip=16, stride=8, resize_size=112):
