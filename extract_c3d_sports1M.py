@@ -67,8 +67,8 @@ def _variable_with_weight_decay(name, shape, stddev, wd):
     return var
 
 
-def read_batches_of_clips(videos, batch_size, num_frames_per_clip=16, stride=8, resize_size=112):
-    clips = read_clips(videos, num_frames_per_clip, stride, resize_size)
+def read_batches_of_clips(videos, batch_size, augment, num_frames_per_clip=16, stride=8, resize_size=112):
+    clips = read_clips(videos, num_frames_per_clip, stride, resize_size, augment)
     batch = []
     descriptors = []
     for clip, path, frame in clips:
@@ -80,30 +80,43 @@ def read_batches_of_clips(videos, batch_size, num_frames_per_clip=16, stride=8, 
         descriptors.append((path, frame))
 
 
-def read_clips(videos, num_frames_per_clip, stride, resize_size):
+def read_clips(videos, num_frames_per_clip, stride, resize_size, augment):
     assert stride < num_frames_per_clip, "stride < num_frames_per_clip"
     for images, path in videos:
-        yield from make_clips(images, num_frames_per_clip, path, resize_size, stride)
+        images = list(images)
+        yield from make_clips(images, num_frames_per_clip, path, resize_size, stride, False, False)
+        if augment:
+            yield from make_clips(images, num_frames_per_clip, path, resize_size, stride, True, False)
+            yield from make_clips(images, num_frames_per_clip, path, resize_size, stride, False, True)
+            yield from make_clips(images, num_frames_per_clip, path, resize_size, stride, True, True)
 
 
 # Padding is 'hold'
-def make_clips(images, num_frames_per_clip, path, resize_size, stride):
+def make_clips(images, num_frames_per_clip, path, resize_size, stride, mirror, half_fps):
+    name = path
+    if mirror:
+        name = f'{name}.mirror'
+    if half_fps:
+        name = f'{name}.lfps'
     clip = []
     first_frame_n = 0
-    for _, frame in images:
+    for frame_num, frame in images:
         if len(clip) >= num_frames_per_clip:
-            yield np.array(clip).astype(np.float32), path, first_frame_n
+            yield np.array(clip).astype(np.float32), name, first_frame_n
             clip = clip[:num_frames_per_clip - stride]
             first_frame_n += stride
-        img = np.array(
-            cv2.resize(frame, (resize_size, resize_size), interpolation=cv2.INTER_LINEAR)
-        ).astype(np.float32)
-        clip.append(img)
+        # skip odd frames if required
+        if not half_fps or frame_num % 2 == 0:
+            frame = cv2.resize(frame, (resize_size, resize_size), interpolation=cv2.INTER_LINEAR)
+            if mirror:
+                frame = cv2.flip(frame, 1)
+            img = np.array(frame).astype(np.float32)
+            clip.append(img)
     # if piece of clip remains then pad it
     if len(clip) > 0:
         for frame in range(len(clip), num_frames_per_clip):
             clip.append(clip[-1])
-        yield np.array(clip).astype(np.float32), path, first_frame_n
+        yield np.array(clip).astype(np.float32), name, first_frame_n
 
 
 def run_test():
@@ -213,7 +226,7 @@ def get_weights_and_biases():
     return biases, weights
 
 
-def extract_c3d(batch_size, device, model_name, named_videos):
+def extract_c3d(batch_size, device, model_name, named_videos, augment=False):
     images_placeholder = tf.placeholder(
         tf.float32,
         shape=(batch_size,
@@ -231,7 +244,7 @@ def extract_c3d(batch_size, device, model_name, named_videos):
     init = tf.global_variables_initializer()
     sess.run(init)
     saver.restore(sess, model_name)
-    for clips, descriptors in read_batches_of_clips(named_videos, batch_size):
+    for clips, descriptors in read_batches_of_clips(named_videos, batch_size, augment=augment):
         predictions = logit.eval(
             session=sess,
             feed_dict={images_placeholder: clips}
