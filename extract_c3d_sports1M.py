@@ -23,9 +23,11 @@ import cv2
 import numpy as np
 import os
 import tensorflow as tf
-
 # Basic model parameters as external flags.
+import torch
+
 from C3D_tensorflow import c3d_model
+from src.util.p3d_model import P3D199
 
 BATCH_SIZE = 10
 
@@ -248,5 +250,16 @@ def extract_c3d(batch_size, device, model_name, named_videos, augment=False):
         predictions = logit.eval(
             session=sess,
             feed_dict={images_placeholder: clips}
+        )
+        yield from zip(predictions, descriptors)
+
+
+def extract_p3d(batch_size, named_videos, augment=False):
+    model = P3D199(pretrained=True, num_classes=400)
+    model = model.cuda()
+
+    for clips, descriptors in read_batches_of_clips(named_videos, batch_size, augment=augment):
+        predictions = model(
+            torch.autograd.Variable(clips).cuda()
         )
         yield from zip(predictions, descriptors)
