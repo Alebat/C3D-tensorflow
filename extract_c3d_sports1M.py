@@ -260,6 +260,6 @@ def extract_p3d(batch_size, named_videos, augment=False):
 
     for clips, descriptors in read_batches_of_clips(named_videos, batch_size, augment=augment):
         predictions = model(
-            torch.autograd.Variable(clips).cuda()
+            torch.tensor(clips).cuda()
         )
         yield from zip(predictions, descriptors)
