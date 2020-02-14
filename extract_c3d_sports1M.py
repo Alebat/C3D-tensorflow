@@ -256,10 +256,10 @@ def extract_c3d(batch_size, device, model_name, named_videos, augment=False):
 
 def extract_p3d(batch_size, named_videos, augment=False):
     model = P3D199(pretrained=True, num_classes=400)
-    model = model.cuda()
+    model = model
 
-    for clips, descriptors in read_batches_of_clips(named_videos, batch_size, augment=augment):
+    for clips, descriptors in read_batches_of_clips(named_videos, batch_size, augment=augment, resize_size=160):
         predictions = model(
-            torch.tensor(clips).cuda()
+            torch.FloatTensor(clips).permute(0, 4, 1, 2, 3)
         )
         yield from zip(predictions, descriptors)
