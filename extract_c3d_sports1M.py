@@ -229,37 +229,41 @@ def get_weights_and_biases():
 
 
 def extract_c3d(batch_size, device, model_name, named_videos, augment=False):
-    images_placeholder = tf.placeholder(
-        tf.float32,
-        shape=(batch_size,
-               c3d_model.NUM_FRAMES_PER_CLIP,
-               c3d_model.CROP_SIZE,
-               c3d_model.CROP_SIZE,
-               c3d_model.CHANNELS))
-    biases, weights = get_weights_and_biases()
-    with tf.device(device):
-        logit = c3d_model.inference_c3d(
-            images_placeholder[0:BATCH_SIZE, :, :, :, :], 0.6,
-            BATCH_SIZE, weights, biases)
-    saver = tf.train.Saver()
-    sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
-    init = tf.global_variables_initializer()
-    sess.run(init)
-    saver.restore(sess, model_name)
-    for clips, descriptors in read_batches_of_clips(named_videos, batch_size, augment=augment):
-        predictions = logit.eval(
-            session=sess,
-            feed_dict={images_placeholder: clips}
-        )
-        yield from zip(predictions, descriptors)
+    with torch.no_grad():
+        images_placeholder = tf.placeholder(
+            tf.float32,
+            shape=(batch_size,
+                   c3d_model.NUM_FRAMES_PER_CLIP,
+                   c3d_model.CROP_SIZE,
+                   c3d_model.CROP_SIZE,
+                   c3d_model.CHANNELS))
+        biases, weights = get_weights_and_biases()
+        with tf.device(device):
+            logit = c3d_model.inference_c3d(
+                images_placeholder[0:BATCH_SIZE, :, :, :, :], 0.6,
+                BATCH_SIZE, weights, biases)
+        saver = tf.train.Saver()
+        sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
+        init = tf.global_variables_initializer()
+        sess.run(init)
+        saver.restore(sess, model_name)
+        for clips, descriptors in read_batches_of_clips(named_videos, batch_size, augment=augment):
+            predictions = logit.eval(
+                session=sess,
+                feed_dict={images_placeholder: clips}
+            )
+            yield from zip(predictions, descriptors)
 
 
 def extract_p3d(batch_size, named_videos, augment=False):
-    model = P3D199(pretrained=True, num_classes=400)
-    model = model
+    pretrained_file = 'data/p3d_rgb_199.checkpoint.pth.tar'
+    weights = torch.load(pretrained_file)['state_dict']
+    with torch.no_grad():
+        model = P3D199(weights).cuda()
+        model.eval()
 
-    for clips, descriptors in read_batches_of_clips(named_videos, batch_size, augment=augment, resize_size=160):
-        predictions = model(
-            torch.FloatTensor(clips).permute(0, 4, 1, 2, 3)
-        )
-        yield from zip(predictions, descriptors)
+        for clips, descriptors in read_batches_of_clips(named_videos, batch_size, augment=augment, resize_size=160):
+            predictions = model(
+                torch.FloatTensor(clips).cuda().permute(0, 4, 1, 2, 3)
+            )
+            yield from zip(predictions, descriptors)
