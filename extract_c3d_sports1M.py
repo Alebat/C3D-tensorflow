@@ -97,7 +97,7 @@ def read_clips(videos, num_frames_per_clip, stride, resize_size, augment):
 def make_clips(images, num_frames_per_clip, path, resize_size, stride, mirror, half_fps):
     name = path
     if mirror:
-        name = f'{name}.mirror'
+        name = f'{name}.flip'
     if half_fps:
         name = f'{name}.lfps'
     clip = []
@@ -105,7 +105,7 @@ def make_clips(images, num_frames_per_clip, path, resize_size, stride, mirror, h
     for frame_num, frame in images:
         if len(clip) >= num_frames_per_clip:
             yield np.array(clip).astype(np.float32), name, first_frame_n
-            clip = clip[:num_frames_per_clip - stride]
+            clip = clip[num_frames_per_clip - stride:]
             first_frame_n += stride
         # skip odd frames if required
         if not half_fps or frame_num % 2 == 0:
